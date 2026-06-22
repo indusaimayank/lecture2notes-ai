@@ -73,33 +73,44 @@ class YouTubeDownloader:
                 cfg["cookiefile"] = cookies_file
             return cfg
 
-        download_configs = [
-            # Strategy 1: TV client — least bot-detection, works on servers
-            make_config(["tv"]),
-
-            # Strategy 2: TV + web fallback
-            make_config(["tv", "web"]),
-
-            # Strategy 3: Android — no JS challenge needed
-            make_config(["android"]),
-
-            # Strategy 4: iOS client
-            make_config(["ios"]),
-
-            # Strategy 5: MWeb (mobile web) 
-            make_config(["mweb"]),
-
-            # Strategy 6: Default (no player_client override) with node JS runtime
-            {
-                "format": "bestaudio/best",
-                "outtmpl": output_template,
-                "noplaylist": True,
-                "quiet": False,
-                "js_runtimes": {"node": {}},
-                "postprocessors": postprocessors,
-                **({"cookiefile": cookies_file} if cookies_file else {}),
-            },
+        # Format strings from most preferred to most lenient
+        FORMATS = [
+            "bestaudio[ext=webm]/bestaudio[ext=m4a]/bestaudio/best[height<=480]/best",
+            "bestaudio/best",
+            "best",
         ]
+
+        download_configs = []
+
+        # For each player client, try multiple format strings
+        for player_client in [["tv"], ["tv", "web"], ["android"], ["ios"], ["mweb"], ["web"]]:
+            for fmt in FORMATS:
+                cfg = {
+                    "format": fmt,
+                    "outtmpl": output_template,
+                    "noplaylist": True,
+                    "quiet": False,
+                    "postprocessors": postprocessors,
+                    "extractor_args": {
+                        "youtube": {
+                            "player_client": player_client
+                        }
+                    },
+                }
+                if cookies_file:
+                    cfg["cookiefile"] = cookies_file
+                download_configs.append(cfg)
+
+        # Final fallback: let yt-dlp pick any format with no restrictions
+        download_configs.append({
+            "format": None,  # let yt-dlp decide
+            "outtmpl": output_template,
+            "noplaylist": True,
+            "quiet": False,
+            "postprocessors": postprocessors,
+            "js_runtimes": {"node": {}},
+            **({"cookiefile": cookies_file} if cookies_file else {}),
+        })
 
         last_error = None
 
